@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buscador & Comparador - Farmacia Ecuador</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .glass-panel { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+  </style>
+</head>
+<body class="h-full bg-slate-950 text-slate-200 flex flex-col">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-30 glass-panel border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-extrabold text-lg">FE</div>
+        <div>
+          <h1 class="text-base font-bold text-white">Consulta de Precios Unificada</h1>
+          <p class="text-xs text-slate-400">Farmacia Ecuador C.A.</p>
+        </div>
+      </div>
+      <a href="admin.html" class="text-xs font-semibold px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-slate-500 transition text-slate-300">
+        ⚙️ Cargar / Actualizar Archivos
+      </a>
+    </div>
+  </header>
+
+  <!-- Buscador Principal -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
+
+    <div class="glass-panel p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="relative w-full md:w-2/3">
+        <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-500">🔍</span>
+        <input type="text" id="searchInput" placeholder="Escribe el nombre del medicamento o el código de barras (EAN)..." class="w-full pl-11 pr-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition">
+      </div>
+      <div id="counterInfo" class="text-xs text-slate-400 font-medium">Cargando base de datos...</div>
+    </div>
+
+    <!-- Tabla Comparativa -->
+    <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-900/80 border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <th class="py-4 px-6">Producto / Descripción</th>
+              <th class="py-4 px-4 text-center">Vital Clinic</th>
+              <th class="py-4 px-4 text-center">Droguería Nena</th>
+              <th class="py-4 px-4 text-center">Intercontinental</th>
+              <th class="py-4 px-6 text-center">Mejor Opción</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-800/50 text-sm">
+            <tr>
+              <td colspan="5" class="py-16 text-center text-slate-500">Cargando catálogo...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    let todosLosProductos = [];
+
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open("FarmaciaEcuadorDB", 1);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function cargarDatos() {
+      try {
+        const db = await openDB();
+        const tx = db.transaction("productos", "readonly");
+        const store = tx.objectStore("productos");
+        const req = store.getAll();
+
+        req.onsuccess = () => {
+          todosLosProductos = req.result;
+          document.getElementById('counterInfo').innerText = `${todosLosProductos.length.toLocaleString()} productos unificados cargados.`;
+          renderTabla(todosLosProductos);
+        };
+      } catch(e) {
+        document.getElementById('tableBody').innerHTML = `<tr><td colspan="5" class="py-16 text-center text-slate-500">No hay datos en el sistema. Ve a la página de administración para cargar las listas.</td></tr>`;
+      }
+    }
+
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+      const q = e.target.value.toLowerCase().trim();
+      const filtrados = todosLosProductos.filter(p => 
+        p.nombre.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q))
+      );
+      renderTabla(filtrados);
+    });
+
+    function renderTabla(lista) {
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = '';
+
+      if (lista.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-16 text-center text-slate-500">No se encontraron productos.</td></tr>`;
+        return;
+      }
+
+      // Limitar render inicial a 200 filas para máxima velocidad
+      lista.slice(0, 200).forEach(p => {
+        const preciosValidos = Object.values(p.precios).filter(v => typeof v === 'number' && v > 0);
+        const minPrecio = preciosValidos.length > 0 ? Math.min(...preciosValidos) : 0;
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-800/40 transition border-b border-slate-800/40";
+        
+        tr.innerHTML = `
+          <td class="py-3.5 px-6 font-medium text-slate-200">
+            <div class="font-semibold text-slate-100">${p.nombre}</div>
+            ${p.barcode ? `<div class="text-[11px] text-slate-500 font-mono">EAN: ${p.barcode}</div>` : ''}
+          </td>
+          
+          <td class="py-3.5 px-4 text-center ${p.precios.vital === minPrecio && minPrecio > 0 ? 'font-bold text-emerald-400 bg-emerald-500/10' : 'text-slate-400'}">
+            ${p.precios.vital ? '$' + p.precios.vital.toFixed(2) : '-'}
+          </td>
+          
+          <td class="py-3.5 px-4 text-center ${p.precios.nena === minPrecio && minPrecio > 0 ? 'font-bold text-emerald-400 bg-emerald-500/10' : 'text-slate-400'}">
+            ${p.precios.nena ? '$' + p.precios.nena.toFixed(2) : '-'}
+          </td>
+          
+          <td class="py-3.5 px-4 text-center ${p.precios.inter === minPrecio && minPrecio > 0 ? 'font-bold text-emerald-400 bg-emerald-500/10' : 'text-slate-400'}">
+            ${p.precios.inter ? '$' + p.precios.inter.toFixed(2) : '-'}
+          </td>
+          
+          <td class="py-3.5 px-6 text-center">
+            ${minPrecio > 0 ? `<span class="bg-emerald-500/20 text-emerald-300 font-bold px-3 py-1 rounded-xl text-xs border border-emerald-500/30">$${minPrecio.toFixed(2)}</span>` : '-'}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    cargarDatos();
+  </script>
+</body>
+</html>
