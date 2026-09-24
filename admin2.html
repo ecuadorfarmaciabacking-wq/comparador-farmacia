@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cargador de Catálogos — Farmacia Ecuador</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Librería Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Librería PDF.js para lectura de PDF de Intercontinental -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-200 p-6 flex flex-col justify-center items-center">
+
+  <div class="max-w-5xl w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
+    
+    <div class="flex items-center justify-between border-b border-slate-800 pb-5">
+      <div>
+        <h1 class="text-xl font-bold text-white">Cargador de Precios — Soporte PDF/Excel</h1>
+        <p class="text-xs text-slate-400">Lectura de PDF para Intercontinental y Excel para el resto</p>
+      </div>
+      <a href="INDEX.html" class="text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-4 py-2.5 rounded-xl hover:bg-emerald-500/20 transition">
+        Ir al Buscador →
+      </a>
+    </div>
+
+    <!-- Botones de Carga -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-5 text-center space-y-3">
+        <h2 class="text-sm font-bold text-amber-400">1. Insuaminca</h2>
+        <p class="text-[11px] text-amber-300 font-mono">Excel: PRECIO F</p>
+        <label class="cursor-pointer bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs py-2.5 px-4 rounded-xl block shadow-lg">
+          Cargar INSUAMINCA.xlsx
+          <input type="file" accept=".xlsx, .xls, .csv" class="hidden" onchange="cargarDrogueria(event, 'insuaminca')">
+        </label>
+      </div>
+
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-5 text-center space-y-3">
+        <h2 class="text-sm font-bold text-blue-400">2. Droguería Nena</h2>
+        <p class="text-[11px] text-blue-300 font-mono">Excel: PRECIO EXTERNO($)</p>
+        <label class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2.5 px-4 rounded-xl block shadow-lg">
+          Cargar NENA.xlsx
+          <input type="file" accept=".xlsx, .xls, .csv" class="hidden" onchange="cargarDrogueria(event, 'nena')">
+        </label>
+      </div>
+
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-5 text-center space-y-3">
+        <h2 class="text-sm font-bold text-cyan-400">3. Dromega</h2>
+        <p class="text-[11px] text-cyan-300 font-mono">Excel: PRECIO $</p>
+        <label class="cursor-pointer bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs py-2.5 px-4 rounded-xl block shadow-lg">
+          Cargar DROMEGA.xlsx
+          <input type="file" accept=".xlsx, .xls, .csv" class="hidden" onchange="cargarDrogueria(event, 'dromega')">
+        </label>
+      </div>
+
+      <!-- Intercontinental con soporte para PDF -->
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-5 text-center space-y-3">
+        <h2 class="text-sm font-bold text-purple-400">4. Intercontinental</h2>
+        <p class="text-[11px] text-purple-300 font-mono">PDF o Excel: NETO</p>
+        <label class="cursor-pointer bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs py-2.5 px-4 rounded-xl block shadow-lg">
+          Cargar INTER (PDF / Excel)
+          <input type="file" accept=".pdf, .xlsx, .xls, .csv" class="hidden" onchange="cargarDrogueria(event, 'inter')">
+        </label>
+      </div>
+
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-5 text-center space-y-3">
+        <h2 class="text-sm font-bold text-emerald-400">5. Vital Clinic</h2>
+        <p class="text-[11px] text-emerald-300 font-mono">Excel: PRECIO NETO $</p>
+        <label class="cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-2.5 px-4 rounded-xl block shadow-lg">
+          Cargar VITAL.xlsx
+          <input type="file" accept=".xlsx, .xls, .csv" class="hidden" onchange="cargarDrogueria(event, 'vital')">
+        </label>
+      </div>
+    </div>
+
+    <div id="statusBox" class="hidden p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-emerald-400 break-words space-y-2"></div>
+
+    <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+      <button onclick="borrarBD()" class="text-xs font-semibold text-rose-400 hover:underline">
+        🗑️ Vaciar Nube Completa
+      </button>
+      <span id="totalSaved" class="text-xs text-slate-400">Conectando...</span>
+    </div>
+
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBFIE1B40489wm4QguyRLCTHL5QCmEE7eo",
+      authDomain: "farmaciaecuadorcomparador.firebaseapp.com",
+      databaseURL: "https://farmaciaecuadorcomparador-default-rtdb.firebaseio.com",
+      projectId: "farmaciaecuadorcomparador",
+      storageBucket: "farmaciaecuadorcomparador.firebasestorage.app",
+      messagingSenderId: "716139216624",
+      appId: "1:716139216624:web:b693cf4d7e04ff57fb8c35",
+      measurementId: "G-5N6ZXYF6GP"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    db.ref("catalogos").on("value", (snapshot) => {
+      const val = snapshot.val() || {};
+      let total = 0;
+      Object.keys(val).forEach(prov => {
+        total += Object.keys(val[prov]).length;
+      });
+      document.getElementById('totalSaved').innerText = `${total.toLocaleString()} registros en Firebase.`;
+    });
+
+    function parseMontoLimpio(val) {
+      if (val === null || val === undefined) return 0;
+      let str = val.toString().trim();
+      if (!str) return 0;
+
+      str = str.replace(/[^0-9.,]/g, '');
+      if (!str) return 0;
+
+      if (str.includes(',') && str.includes('.')) {
+        if (str.indexOf('.') < str.indexOf(',')) {
+          str = str.replace(/\./g, '').replace(',', '.');
+        } else {
+          str = str.replace(/,/g, '');
+        }
+      } else if (str.includes(',')) {
+        str = str.replace(',', '.');
+      }
+
+      let num = parseFloat(str);
+      return isNaN(num) ? 0 : parseFloat(num.toFixed(2));
+    }
+
+    async function cargarDrogueria(event, proveedor) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const statusBox = document.getElementById('statusBox');
+      statusBox.classList.remove('hidden');
+      statusBox.innerText = `Procesando ${file.name}...`;
+
+      try {
+        if (file.name.toLowerCase().endsWith('.pdf')) {
+          await procesarPDFIntercontinental(file, statusBox);
+        } else {
+          await procesarExcel(file, proveedor, statusBox);
+        }
+        event.target.value = "";
+      } catch (err) {
+        statusBox.innerHTML = `<div class="text-rose-400 font-bold">❌ Error: ${err.message}</div>`;
+      }
+    }
+
+    // PROCESADOR DE ARCHIVOS PDF (Intercontinental)
+    async function procesarPDFIntercontinental(file, statusBox) {
+      const buffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+      const dataProv = {};
+      let contador = 0;
+      let muestras = [];
+
+      for (let p = 1; p <= pdf.numPages; p++) {
+        statusBox.innerText = `Leyendo PDF Intercontinental (Página ${p} de ${pdf.numPages})...`;
+        const page = await pdf.getPage(p);
+        const textContent = await page.getTextContent();
+        
+        // Agrupar texto por líneas según la posición Y
+        let linesMap = {};
+        textContent.items.forEach(item => {
+          let y = Math.round(item.transform[5]);
+          if (!linesMap[y]) linesMap[y] = [];
+          linesMap[y].push(item.str);
+        });
+
+        // Ordenar líneas de arriba hacia abajo
+        let sortedY = Object.keys(linesMap).sort((a, b) => b - a);
+
+        sortedY.forEach(y => {
+          let lineText = linesMap[y].join(" ").trim();
+          if (!lineText || lineText.toUpperCase().includes("DESCRIPCION") || lineText.toUpperCase().includes("PAGINA")) return;
+
+          // Extraer precios con formato decimal de la línea
+          let matches = lineText.match(/\d+[\.,]\d{2}/g);
+          if (matches && matches.length > 0) {
+            // El último monto con decimales corresponde al NETO
+            let precioStr = matches[matches.length - 1];
+            let precio = parseMontoLimpio(precioStr);
+
+            // Eliminar números/precios del final para obtener la descripción del producto
+            let nombre = lineText.replace(/\d+[\.,]\d{2}/g, '').replace(/NETO|USD|\$/gi, '').trim();
+
+            if (nombre.length > 3 && precio > 0) {
+              const id = "ITEM_" + contador++;
+              dataProv[id] = {
+                nombre: nombre,
+                codigo: "",
+                precio: precio
+              };
+
+              if (muestras.length < 3) {
+                muestras.push(`• <b>${nombre.substring(0, 35)}...</b> ➔ NETO: <b>$${precio} USD</b>`);
+              }
+            }
+          }
+        });
+      }
+
+      await db.ref("catalogos/inter").set(dataProv);
+
+      statusBox.innerHTML = `
+        <div class="text-purple-400 font-bold text-sm">✅ INTERCONTINENTAL (PDF) CARGADO CORRECTAMENTE</div>
+        <div>📊 <b>Productos extraídos del PDF:</b> ${contador}</div>
+        <div class="pt-2 border-t border-slate-800 text-slate-300 font-sans text-xs space-y-1">
+          <div class="font-bold text-slate-400">Primeros ítems detectados:</div>
+          ${muestras.join("<br>")}
+        </div>
+      `;
+    }
+
+    // PROCESADOR DE EXCEL
+    async function procesarExcel(file, proveedor, statusBox) {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', raw: true });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+
+      let hIdx = -1;
+      for (let i = 0; i < Math.min(matrix.length, 40); i++) {
+        const rowStr = matrix[i].map(x => x.toString().toUpperCase()).join(' ');
+        if (rowStr.includes('DESCRIP') || rowStr.includes('PRODUCTO') || rowStr.includes('ARTICULO') || rowStr.includes('NOMBRE')) {
+          hIdx = i;
+          break;
+        }
+      }
+
+      if (hIdx === -1) throw new Error("No se halló la fila de títulos/encabezados en el Excel.");
+
+      const headersOriginales = matrix[hIdx].map(h => h.toString().trim());
+      const headersClean = headersOriginales.map(h => h.toUpperCase().replace(/\s+/g, ' '));
+
+      let idxDesc = headersClean.findIndex(h => /DESCRIP|PRODUCTO|ARTICULO|NOMBRE/i.test(h));
+      let idxBar = headersClean.findIndex(h => /BARRA|EAN|COD\/BARRAS|CODIGO/i.test(h));
+      let idxPrice = -1;
+
+      if (proveedor === 'insuaminca') {
+        idxPrice = headersClean.findIndex(h => h.includes("PRECIO F"));
+      } else if (proveedor === 'nena') {
+        idxPrice = headersClean.findIndex(h => h.includes("PRECIO EXTERNO"));
+      } else if (proveedor === 'dromega') {
+        idxPrice = headersClean.findIndex(h => h.includes("PRECIO $") \vert{}\vert{} h.includes("PRECIO$"));
+      } else if (proveedor === 'inter') {
+        idxPrice = headersClean.findIndex(h => h.includes("NETO"));
+      } else if (proveedor === 'vital') {
+        idxPrice = headersClean.findIndex(h => h.includes("PRECIO NETO") || h.includes("NETO $"));
+      }
+
+      if (idxDesc === -1 || idxPrice === -1) {
+        throw new Error(`NO SE HALLÓ LA COLUMNA NETO/PRECIO EN ${proveedor.toUpperCase()}.\nColumnas leídas: [ ${headersOriginales.join(" | ")} ]`);
+      }
+
+      const nombreColUsada = headersOriginales[idxPrice];
+      const dataProv = {};
+      let contador = 0;
+      let muestras = [];
+
+      for (let i = hIdx + 1; i < matrix.length; i++) {
+        const row = matrix[i];
+        if (!row || !row[idxDesc]) continue;
+
+        const nombre = row[idxDesc].toString().trim();
+        const rawPrice = row[idxPrice];
+        const precio = parseMontoLimpio(rawPrice);
+        const codigo = idxBar !== -1 ? row[idxBar].toString().trim() : "";
+
+        if (nombre && precio > 0) {
+          const id = "ITEM_" + contador++;
+          dataProv[id] = {
+            nombre: nombre,
+            codigo: codigo,
+            precio: precio
+          };
+
+          if (muestras.length < 3) {
+            muestras.push(`• <b>${nombre.substring(0, 30)}...</b> ➔ Valor Excel: <code class="bg-slate-800 text-yellow-300 px-1">${rawPrice}</code> ➔ Guardado: <b>$${precio} USD</b>`);
+          }
+        }
+      }
+
+      await db.ref(`catalogos/${proveedor}`).set(dataProv);
+
+      statusBox.innerHTML = `
+        <div class="text-emerald-400 font-bold text-sm">✅ ${proveedor.toUpperCase()} CARGADO (EXCEL)</div>
+        <div>📌 <b>Columna usada:</b> <span class="text-white border border-slate-700 px-2 py-0.5 rounded bg-slate-900">${nombreColUsada}</span></div>
+        <div>📊 <b>Productos cargados:</b> ${contador}</div>
+        <div class="pt-2 border-t border-slate-800 text-slate-300 font-sans text-xs space-y-1">
+          <div class="font-bold text-slate-400">Muestra de datos guardados:</div>
+          ${muestras.join("<br>")}
+        </div>
+      `;
+    }
+
+    function borrarBD() {
+      if (confirm("¿Vaciar toda la base de datos?")) {
+        db.ref("catalogos").remove().then(() => alert("Base de datos limpia."));
+      }
+    }
+  </script>
+</body>
+</html>
